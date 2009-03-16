@@ -10,24 +10,25 @@ module Paperclip
     # unless specified. Thumbnail creation will raise no errors unless
     # +whiny_thumbnails+ is true (which it is, by default. If +convert_options+ is
     # set, the options will be appended to the convert command upon image conversion 
-    def initialize file, target_geometry, format = nil, convert_options = nil, whiny_thumbnails = true
+    def initialize file, target_geometry, format = nil, convert_options = nil, whiny_thumbnails = true, rotate_degrees = 0
       @file             = file
       @crop             = target_geometry[-1,1] == '#'
       @target_geometry  = Geometry.parse target_geometry
       @current_geometry = Geometry.from_file file
       @convert_options  = convert_options
+      @rotate_degrees   = rotate_degrees
       @whiny_thumbnails = whiny_thumbnails
 
       @current_format   = File.extname(@file.path)
       @basename         = File.basename(@file.path, @current_format)
-      
+            
       @format = format
     end
 
     # Creates a thumbnail, as specified in +initialize+, +make+s it, and returns the
     # resulting Tempfile.
-    def self.make file, dimensions, format = nil, convert_options = nil, whiny_thumbnails = true
-      new(file, dimensions, format, convert_options, whiny_thumbnails).make
+    def self.make file, dimensions, format = nil, convert_options = nil, whiny_thumbnails = true, rotate_degrees = 0
+      new(file, dimensions, format, convert_options, whiny_thumbnails, rotate_degrees).make
     end
 
     # Returns true if the +target_geometry+ is meant to crop.
@@ -69,6 +70,9 @@ module Paperclip
       trans = "-resize \"#{scale}\""
       trans << " -crop \"#{crop}\" +repage" if crop
       trans << " #{convert_options}" if convert_options?
+      if @rotate_degrees.to_i != 0
+        trans << " -rotate #{@rotate_degrees.to_i.to_s}"
+      end
       trans
     end
   end

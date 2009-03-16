@@ -1,3 +1,9 @@
+begin 
+  require 'mini_exiftool'
+rescue LoadError 
+  warn ' ~ ** mini_exiftool not found - auto-correct image orientation during upload disabled'
+end
+
 module Paperclip
   # The Attachment class manages the files for a given attachment. It saves when the model saves,
   # deletes when the model is destroyed, and processes the file upon assignment.
@@ -71,13 +77,13 @@ module Paperclip
       newvals = {}
       if uploaded_file.is_a?(Mash)
         @queued_for_write[:original]          = uploaded_file['tempfile']
-        newvals = { :"#{@name}_file_name"    => uploaded_file['filename'].strip.gsub(/[^\w\d\.\-]+/, '_')[/[^\\]+$/],
+        newvals = { :"#{@name}_file_name"    => uploaded_file['filename'].strip.gsub(/[^\w\d\.\-]+/, '_'),
                     :"#{@name}_content_type" => uploaded_file['content_type'].strip,
                     :"#{@name}_file_size"    => uploaded_file['size'],
                     :"#{@name}_updated_at"   => Time.now }
       else
         @queued_for_write[:original]          = uploaded_file.to_tempfile
-        newvals = { :"#{@name}_file_name"    => uploaded_file.original_filename.strip.gsub(/[^\w\d\.\-]+/, '_')[/[^\\]+$/],
+        newvals = { :"#{@name}_file_name"    => uploaded_file.original_filename.strip.gsub(/[^\w\d\.\-]+/, '_'),
                     :"#{@name}_content_type" => uploaded_file.content_type.strip,
                     :"#{@name}_file_size"    => uploaded_file.size,
                     :"#{@name}_updated_at"   => Time.now }
@@ -239,7 +245,7 @@ module Paperclip
 
     def valid_assignment? file #:nodoc:
       return true if file.nil?
-      if(file.is_a?(File) || file.is_a?(Tempfile))
+      if(file.is_a?(File))
         (file.respond_to?(:original_filename) && file.respond_to?(:content_type))
       elsif(file.is_a?(Mash))
         (file.include?('tempfile') && file.include?('content_type') && file.include?('size') && file.include?('filename'))
@@ -276,6 +282,7 @@ module Paperclip
     def post_process #:nodoc:
       return if @queued_for_write[:original].nil?
       #logger.info("[paperclip] Post-processing #{name}")
+      degrees = rotate_degrees
       @styles.each do |name, args|
         begin
           dimensions, format = args
@@ -284,11 +291,25 @@ module Paperclip
                                                    dimensions,
                                                    format, 
                                                    extra_options_for(name),
-                                                   @whiny_thumnails)
+                                                   @whiny_thumnails,
+                                                   degrees)
         rescue PaperclipError => e
           @errors << e.message if @whiny_thumbnails
         end
       end
+    end
+
+    # Returns the number of degrees to rotate to get to the correct image orientation
+    # Code inspired by: http://pastie.org/158604/wrap
+    def rotate_degrees
+      begin
+        #start_time = Time.now
+        degrees = MiniExiftool.new(@queued_for_write[:original].path)['orientation'].split[1]
+        #Merb.logger.debug('** exif_time: '+(Time.now - start_time).to_s)
+      rescue
+        degrees = 0
+      end
+      degrees
     end
 
     def interpolate pattern, style = default_style #:nodoc:
@@ -321,4 +342,3 @@ module Paperclip
 
   end
 end
-
